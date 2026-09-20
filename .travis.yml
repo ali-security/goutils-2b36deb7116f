@@ -1,10 +1,23 @@
 language: go
 
+# The 1.6/1.7 legs no longer provision: gimme on the current Travis image
+# reports "go1.6: command not found" and silently falls back to the system Go,
+# and the "tip" leg cannot bootstrap ("building Go requires Go 1.26.0 or
+# later"). Replaced with the release era's provisionable versions (this release
+# is from 2018-12-03 and its declared runtime is go 1.10).
+# Quoted so 1.10 stays "1.10" — unquoted it is the YAML float 1.1.
 go:
-  - 1.6
-  - 1.7
-  - 1.8
-  - tip
+  - "1.8"
+  - "1.9"
+  - "1.10"
+  - "1.11"
+
+# Skip Travis's implicit "go get -v -t ./..." step, which fails on every leg:
+# on a modern Go because this pre-modules package has no go.mod, and on Go 1.8
+# because Travis checks the repo out under /home/travis/build rather than under
+# GOPATH/src. Nothing needs fetching — goutils imports only the standard
+# library and all its tests are in-package. "go test" below still runs in full.
+install: true
 
 script:
   - go test -v

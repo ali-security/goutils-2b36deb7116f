@@ -1,0 +1,52 @@
+name: pack
+
+on: workflow_dispatch
+
+jobs:
+  pack:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
+      # Stage the tree that goes into the module zip. The published zip is
+      # built from the tagged repo contents, so drop .git and the .github
+      # directory this build adds (golang.org/x/mod/zip skips .git but not
+      # .github).
+      - name: Stage module contents
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/stage /tmp/out
+          cp -a "${GITHUB_WORKSPACE}/." /tmp/stage/
+          rm -rf /tmp/stage/.git /tmp/stage/.github
+          ls -la /tmp/stage
+
+      # Pack with golang.org/x/mod/zip, the same library the module proxy uses,
+      # so every entry gets the required "<module-path>@<version>/" prefix and
+      # the canonical zero timestamps. The packer is base64-encoded because a
+      # workflow linter rewrites the leading whitespace of inline Go source,
+      # and it is materialised outside the checkout so it cannot leak into the
+      # artifact.
+      - name: Build module zip
+        env:
+          PACKER_B64: cGFja2FnZSBtYWluCgppbXBvcnQgKAoJIm9zIgoKCSJnb2xhbmcub3JnL3gvbW9kL21vZHVsZSIKCSJnb2xhbmcub3JnL3gvbW9kL3ppcCIKKQoKZnVuYyBtYWluKCkgewoJZiwgZXJyIDo9IG9zLkNyZWF0ZSgiL3RtcC9vdXQvdjEuMS4wLnppcCIpCglpZiBlcnIgIT0gbmlsIHsKCQlwYW5pYyhlcnIpCgl9CglkZWZlciBmLkNsb3NlKCkKCW12IDo9IG1vZHVsZS5WZXJzaW9ue1BhdGg6ICJnaXRodWIuY29tL01hc3Rlcm1pbmRzL2dvdXRpbHMiLCBWZXJzaW9uOiAidjEuMS4wIn0KCWlmIGVyciA6PSB6aXAuQ3JlYXRlRnJvbURpcihmLCBtdiwgIi90bXAvc3RhZ2UiKTsgZXJyICE9IG5pbCB7CgkJcGFuaWMoZXJyKQoJfQp9Cg==
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/packer
+          cd /tmp/packer
+          printf 'module packer\n\ngo 1.22\n' > go.mod
+          printf '%s' "$PACKER_B64" | base64 -d > main.go
+          cat main.go
+          go get golang.org/x/mod@v0.17.0
+          go run .
+          unzip -l /tmp/out/v1.1.0.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v1.1.0
+          path: /tmp/out/v1.1.0.zip
+          if-no-files-found: error
